@@ -23,3 +23,22 @@ export interface SimulationScenario {
   wearsPerYear: number;
   resaleValueAfter5Years: number;
 }
+
+export interface ThemeConfig {
+  name: string;
+  colors: {
+    bg: string;
+    card: string;
+    text: string;
+    muted: string;
+    primary: string;
+    secondary: string;
+    accent: string;
+    accentBg: string;
+    border: string;
+  };
+  fonts: {
+    heading: string;
+    body: string;
+  };
+}

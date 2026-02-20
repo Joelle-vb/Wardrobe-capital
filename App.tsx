@@ -5,7 +5,8 @@ import {
   LineChart, 
   Sparkles, 
   Menu,
-  X
+  X,
+  LogOut
 } from 'lucide-react';
 import { WardrobeItem, ViewState } from './types';
 import { DashboardStats } from './components/DashboardStats';
@@ -14,12 +15,14 @@ import { InvestmentSimulator } from './components/InvestmentSimulator';
 import { Button } from './components/Button';
 import { MarkdownRenderer } from './components/MarkdownRenderer';
 import { getPortfolioAdvice } from './services/geminiService';
+import { ThemeProvider } from './components/ThemeContext';
+import { ThemePanel } from './components/ThemePanel';
+import { AuthProvider, useAuth } from './components/AuthContext';
+import { AuthForm } from './components/AuthForm';
 
-const App = () => {
-  const [items, setItems] = useState<WardrobeItem[]>(() => {
-    const saved = localStorage.getItem('wardrobe_items');
-    return saved ? JSON.parse(saved) : [];
-  });
+const AppContent = () => {
+  const { user, loading, logout } = useAuth();
+  const [items, setItems] = useState<WardrobeItem[]>([]);
   
   const [view, setView] = useState<ViewState>('DASHBOARD');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -28,19 +31,59 @@ const App = () => {
   const [isAdvising, setIsAdvising] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem('wardrobe_items', JSON.stringify(items));
-  }, [items]);
+    if (user) {
+      fetch('/api/items')
+        .then(res => {
+          if (!res.ok) throw new Error('Failed to fetch items');
+          return res.json();
+        })
+        .then(data => {
+          if (Array.isArray(data)) {
+            setItems(data);
+          } else {
+            console.error('Expected array of items, got:', data);
+            setItems([]);
+          }
+        })
+        .catch(err => {
+          console.error('Failed to fetch items', err);
+          setItems([]);
+        });
+    }
+  }, [user]);
 
-  const handleAddItem = (newItem: Omit<WardrobeItem, 'id'>) => {
+  const handleAddItem = async (newItem: Omit<WardrobeItem, 'id'>) => {
     const item: WardrobeItem = {
       ...newItem,
       id: Math.random().toString(36).substr(2, 9)
     };
+    
+    // Optimistic update
     setItems([item, ...items]);
+
+    try {
+      await fetch('/api/items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item)
+      });
+    } catch (err) {
+      console.error('Failed to save item', err);
+      // Revert on failure
+      setItems(prev => prev.filter(i => i.id !== item.id));
+    }
   };
 
-  const handleDeleteItem = (id: string) => {
+  const handleDeleteItem = async (id: string) => {
+    const oldItems = [...items];
     setItems(items.filter(i => i.id !== id));
+
+    try {
+      await fetch(`/api/items/${id}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error('Failed to delete item', err);
+      setItems(oldItems);
+    }
   };
 
   const handleAskAdvisor = async (e: React.FormEvent) => {
@@ -63,8 +106,8 @@ const App = () => {
       onClick={() => { setView(id); setIsSidebarOpen(false); }}
       className={`w-full flex items-center px-4 py-3.5 text-sm font-medium transition-all duration-200 rounded-lg mb-1 ${
         view === id 
-          ? 'bg-gray-900 text-white shadow-md' 
-          : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+          ? 'bg-theme-primary text-theme-card shadow-md' 
+          : 'text-theme-muted hover:text-theme-text hover:bg-theme-secondary'
       }`}
     >
       <span className="mr-3">{icon}</span>
@@ -72,20 +115,35 @@ const App = () => {
     </button>
   );
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-theme-bg text-theme-text">
+        <div className="animate-pulse flex flex-col items-center">
+          <div className="h-12 w-12 bg-theme-secondary rounded-full mb-4"></div>
+          <div className="h-4 w-32 bg-theme-secondary rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthForm />;
+  }
+
   return (
-    <div className="flex h-screen bg-[#f9fafb] font-sans overflow-hidden">
+    <div className="flex h-screen bg-theme-bg font-body overflow-hidden transition-colors duration-300">
       {/* Sidebar */}
       <aside 
-        className={`fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-gray-100 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-72 bg-theme-card border-r border-theme-border transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } shadow-lg lg:shadow-none`}
       >
         <div className="h-full flex flex-col px-4">
           <div className="h-20 flex items-center justify-between px-2">
-            <h1 className="text-2xl font-serif font-bold text-gray-900 tracking-tight">
-              Wardrobe<span className="text-gray-400 italic">Capital</span>
+            <h1 className="text-2xl font-heading font-bold text-theme-text tracking-tight">
+              Wardrobe<span className="text-theme-muted italic">Capital</span>
             </h1>
-            <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-gray-400 hover:text-gray-900">
+            <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-theme-muted hover:text-theme-text">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -97,35 +155,48 @@ const App = () => {
             <NavItem id="ADVISOR" icon={<Sparkles className="w-5 h-5" />} label="AI Advisory" />
           </nav>
 
-          <div className="py-6 border-t border-gray-100">
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-              <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1">Net Asset Value</p>
-              <p className="text-xl font-serif font-bold text-gray-900">
+          <div className="py-6 border-t border-theme-border">
+            <div className="bg-theme-secondary rounded-xl p-4 border border-theme-border mb-4">
+              <p className="text-xs text-theme-muted font-medium uppercase tracking-wider mb-1">Net Asset Value</p>
+              <p className="text-xl font-heading font-bold text-theme-text">
                 €{items.reduce((sum, i) => sum + i.price, 0).toLocaleString()}
               </p>
             </div>
+            
+            <button 
+              onClick={logout}
+              className="w-full flex items-center justify-center px-4 py-2 text-sm font-medium text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Sign Out
+            </button>
           </div>
         </div>
       </aside>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-20 border-b border-gray-100 bg-white/80 backdrop-blur-sm flex items-center px-4 lg:px-10 justify-between sticky top-0 z-10">
+        <header className="h-20 border-b border-theme-border bg-theme-card/80 backdrop-blur-sm flex items-center px-4 lg:px-10 justify-between sticky top-0 z-10 transition-colors duration-300">
           <button 
             onClick={() => setIsSidebarOpen(true)}
-            className="lg:hidden p-2 text-gray-400 hover:text-gray-900"
+            className="lg:hidden p-2 text-theme-muted hover:text-theme-text"
           >
             <Menu className="w-6 h-6" />
           </button>
           <div className="flex-1 flex justify-between items-center">
-             <div className="text-sm font-medium text-gray-900">
+             <div className="text-sm font-medium text-theme-text">
                 {view === 'DASHBOARD' && 'Executive Overview'}
                 {view === 'WARDROBE' && 'Asset Management'}
                 {view === 'SIMULATOR' && 'Future Projections'}
                 {view === 'ADVISOR' && 'Strategic Advice'}
              </div>
-             <div className="text-xs text-gray-400 font-mono hidden sm:block">
-                BTC/EUR: {(items.reduce((sum, i) => sum + i.price, 0) / 90000).toFixed(4)}
+             <div className="flex items-center gap-4">
+                <div className="text-sm font-medium text-theme-text hidden sm:block">
+                  {user.username}
+                </div>
+                <div className="text-xs text-theme-muted font-mono hidden sm:block">
+                    BTC/EUR: {(items.reduce((sum, i) => sum + i.price, 0) / 90000).toFixed(4)}
+                </div>
              </div>
           </div>
         </header>
@@ -144,25 +215,25 @@ const App = () => {
               <div className="max-w-3xl mx-auto h-full flex flex-col">
                 <div className="flex-1 overflow-y-auto mb-6 pr-2 scrollbar-hide">
                   {advisorResponse ? (
-                    <div className="bg-white border border-gray-100 shadow-sm rounded-xl p-8">
-                      <div className="flex items-center mb-6 text-gray-900 border-b border-gray-100 pb-4">
-                          <div className="p-2 bg-emerald-50 rounded-lg mr-3">
-                            <Sparkles className="w-5 h-5 text-emerald-600" />
+                    <div className="bg-theme-card border border-theme-border shadow-sm rounded-xl p-8 transition-colors duration-300">
+                      <div className="flex items-center mb-6 text-theme-text border-b border-theme-border pb-4">
+                          <div className="p-2 bg-theme-accent-bg rounded-lg mr-3">
+                            <Sparkles className="w-5 h-5 text-theme-accent" />
                           </div>
                           <div>
-                            <span className="font-serif font-bold text-lg block">Investment Memorandum</span>
-                            <span className="text-xs text-gray-500 uppercase tracking-wide">Generated by Gemini 3.0 Pro</span>
+                            <span className="font-heading font-bold text-lg block">Investment Memorandum</span>
+                            <span className="text-xs text-theme-muted uppercase tracking-wide">Generated by Gemini 3.0 Pro</span>
                           </div>
                       </div>
                       <MarkdownRenderer content={advisorResponse} />
                     </div>
                   ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-center p-8 text-gray-400">
-                      <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-6">
-                         <Sparkles className="w-8 h-8 text-gray-300" />
+                    <div className="h-full flex flex-col items-center justify-center text-center p-8 text-theme-muted">
+                      <div className="w-16 h-16 bg-theme-secondary rounded-full flex items-center justify-center mb-6">
+                         <Sparkles className="w-8 h-8 text-theme-muted/50" />
                       </div>
-                      <h3 className="text-xl font-serif font-medium text-gray-900 mb-3">Portfolio Advisory</h3>
-                      <p className="max-w-md text-gray-500 leading-relaxed">I can analyze your diversification, suggest liquidation strategies for underperforming assets, or calculate the ROI of your shoe collection.</p>
+                      <h3 className="text-xl font-heading font-medium text-theme-text mb-3">Portfolio Advisory</h3>
+                      <p className="max-w-md leading-relaxed">I can analyze your diversification, suggest liquidation strategies for underperforming assets, or calculate the ROI of your shoe collection.</p>
                     </div>
                   )}
                 </div>
@@ -172,7 +243,7 @@ const App = () => {
                     value={advisorPrompt}
                     onChange={(e) => setAdvisorPrompt(e.target.value)}
                     placeholder="Ask for strategic advice (e.g. 'How can I optimize my coat collection?')"
-                    className="w-full bg-white border border-gray-200 rounded-xl pl-5 pr-32 py-4 text-gray-900 focus:ring-2 focus:ring-gray-900/10 focus:border-gray-900 focus:outline-none shadow-sm transition-all placeholder:text-gray-400"
+                    className="w-full bg-theme-card border border-theme-border rounded-xl pl-5 pr-32 py-4 text-theme-text focus:ring-2 focus:ring-theme-primary/10 focus:border-theme-primary focus:outline-none shadow-sm transition-all placeholder:text-theme-muted"
                   />
                   <div className="absolute right-2 top-2 bottom-2">
                       <Button type="submit" isLoading={isAdvising} className="h-full rounded-lg px-6">Analyze</Button>
@@ -186,5 +257,14 @@ const App = () => {
     </div>
   );
 };
+
+const App = () => (
+  <ThemeProvider>
+    <AuthProvider>
+      <AppContent />
+      <ThemePanel />
+    </AuthProvider>
+  </ThemeProvider>
+);
 
 export default App;

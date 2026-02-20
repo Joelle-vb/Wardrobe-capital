@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Wardrobe Capital</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Montserrat:wght@400;600&family=Merriweather:wght@400;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         theme: {
           extend: {
             fontFamily: {
-              serif: ['Playfair Display', 'serif'],
-              sans: ['Inter', 'sans-serif'],
+              heading: ['var(--font-heading)', 'serif'],
+              body: ['var(--font-body)', 'sans-serif'],
               mono: ['JetBrains Mono', 'monospace'],
             },
             colors: {
@@ -21,17 +21,16 @@
                 850: '#1a202c',
                 950: '#0d1117',
               },
-              emerald: {
-                450: '#10b981', 
-              },
-              // A specific chic color palette
-              chic: {
-                bg: '#f9fafb', // Very light gray/white
-                card: '#ffffff',
-                text: '#111827', // Gray 900
-                muted: '#6b7280', // Gray 500
-                primary: '#111827', // Black/Gray 900 for buttons (luxury feel)
-                accent: '#059669', // Emerald 600 for positive numbers
+              theme: {
+                bg: 'var(--color-bg)',
+                card: 'var(--color-card)',
+                text: 'var(--color-text)',
+                muted: 'var(--color-muted)',
+                primary: 'var(--color-primary)',
+                secondary: 'var(--color-secondary)',
+                accent: 'var(--color-accent)',
+                'accent-bg': 'var(--color-accent-bg)',
+                border: 'var(--color-border)',
               }
             }
           }
@@ -39,10 +38,28 @@
       }
     </script>
     <style>
-      body {
-        background-color: #f9fafb; 
-        color: #111827;
+      :root {
+        /* Default Theme: Chic */
+        --color-bg: #f9fafb;
+        --color-card: #ffffff;
+        --color-text: #111827;
+        --color-muted: #6b7280;
+        --color-primary: #111827;
+        --color-secondary: #f3f4f6;
+        --color-accent: #059669;
+        --color-accent-bg: #ecfdf5;
+        --color-border: #e5e7eb;
+        
+        --font-heading: 'Playfair Display';
+        --font-body: 'Inter';
       }
+      
+      body {
+        background-color: var(--color-bg); 
+        color: var(--color-text);
+        transition: background-color 0.3s ease, color 0.3s ease;
+      }
+
       /* Custom Scrollbar - softer for light mode */
       ::-webkit-scrollbar {
         width: 8px;
@@ -71,8 +88,10 @@
       }
     }
     </script>
-  </head>
+  <link rel="stylesheet" href="/index.css">
+</head>
   <body>
     <div id="root"></div>
-  </body>
+  <script type="module" src="/index.tsx"></script>
+</body>
 </html>
