@@ -6,6 +6,8 @@ export interface WardrobeItem {
   price: number;
   purchaseDate: string;
   wearsPerYear: number;
+  imageUrl?: string;
+  material?: string;
 }
 
 export type ViewState = 'DASHBOARD' | 'WARDROBE' | 'SIMULATOR' | 'ADVISOR';

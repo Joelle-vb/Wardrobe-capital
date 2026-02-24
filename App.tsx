@@ -17,11 +17,9 @@ import { MarkdownRenderer } from './components/MarkdownRenderer';
 import { getPortfolioAdvice } from './services/geminiService';
 import { ThemeProvider } from './components/ThemeContext';
 import { ThemePanel } from './components/ThemePanel';
-import { AuthProvider, useAuth } from './components/AuthContext';
-import { AuthForm } from './components/AuthForm';
+import { AuthProvider } from './components/AuthContext';
 
 const AppContent = () => {
-  const { user, loading, logout } = useAuth();
   const [items, setItems] = useState<WardrobeItem[]>([]);
   
   const [view, setView] = useState<ViewState>('DASHBOARD');
@@ -31,26 +29,27 @@ const AppContent = () => {
   const [isAdvising, setIsAdvising] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      fetch('/api/items')
-        .then(res => {
-          if (!res.ok) throw new Error('Failed to fetch items');
-          return res.json();
-        })
-        .then(data => {
-          if (Array.isArray(data)) {
-            setItems(data);
-          } else {
-            console.error('Expected array of items, got:', data);
-            setItems([]);
-          }
-        })
-        .catch(err => {
-          console.error('Failed to fetch items', err);
+    fetch('/api/items')
+      .then(res => {
+        if (!res.ok) {
+          console.error('Fetch items failed with status:', res.status, res.statusText);
+          throw new Error(`Failed to fetch items: ${res.status}`);
+        }
+        return res.json();
+      })
+      .then(data => {
+        if (Array.isArray(data)) {
+          setItems(data);
+        } else {
+          console.error('Expected array of items, got:', data);
           setItems([]);
-        });
-    }
-  }, [user]);
+        }
+      })
+      .catch(err => {
+        console.error('Failed to fetch items', err);
+        setItems([]);
+      });
+  }, []);
 
   const handleAddItem = async (newItem: Omit<WardrobeItem, 'id'>) => {
     const item: WardrobeItem = {
@@ -115,21 +114,6 @@ const AppContent = () => {
     </button>
   );
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-theme-bg text-theme-text">
-        <div className="animate-pulse flex flex-col items-center">
-          <div className="h-12 w-12 bg-theme-secondary rounded-full mb-4"></div>
-          <div className="h-4 w-32 bg-theme-secondary rounded"></div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <AuthForm />;
-  }
-
   return (
     <div className="flex h-screen bg-theme-bg font-body overflow-hidden transition-colors duration-300">
       {/* Sidebar */}
@@ -162,14 +146,6 @@ const AppContent = () => {
                 €{items.reduce((sum, i) => sum + i.price, 0).toLocaleString()}
               </p>
             </div>
-            
-            <button 
-              onClick={logout}
-              className="w-full flex items-center justify-center px-4 py-2 text-sm font-medium text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Sign Out
-            </button>
           </div>
         </div>
       </aside>
@@ -192,7 +168,7 @@ const AppContent = () => {
              </div>
              <div className="flex items-center gap-4">
                 <div className="text-sm font-medium text-theme-text hidden sm:block">
-                  {user.username}
+                  Guest User
                 </div>
                 <div className="text-xs text-theme-muted font-mono hidden sm:block">
                     BTC/EUR: {(items.reduce((sum, i) => sum + i.price, 0) / 90000).toFixed(4)}

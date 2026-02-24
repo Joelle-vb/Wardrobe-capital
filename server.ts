@@ -6,42 +6,64 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+declare module 'express-session' {
+  interface SessionData {
+    userId: any;
+  }
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const db = new Database('wardrobe.db');
 
 // Initialize DB
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE,
-    password_hash TEXT
-  );
-  CREATE TABLE IF NOT EXISTS items (
-    id TEXT PRIMARY KEY,
-    user_id INTEGER,
-    name TEXT,
-    type TEXT,
-    price REAL,
-    brand TEXT,
-    material TEXT,
-    purchaseDate TEXT,
-    condition TEXT,
-    imageUrl TEXT,
-    FOREIGN KEY(user_id) REFERENCES users(id)
-  );
-`);
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE,
+      password_hash TEXT
+    );
+    CREATE TABLE IF NOT EXISTS items (
+      id TEXT PRIMARY KEY,
+      user_id INTEGER,
+      name TEXT,
+      category TEXT,
+      price REAL,
+      brand TEXT,
+      material TEXT,
+      purchaseDate TEXT,
+      condition TEXT,
+      imageUrl TEXT,
+      wearsPerYear INTEGER,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    );
+  `);
+  
+  // Ensure default user exists
+  const userExists = db.prepare('SELECT id FROM users WHERE id = 1').get();
+  if (!userExists) {
+    db.prepare('INSERT INTO users (id, username) VALUES (1, "guest")').run();
+  }
+  
+  console.log('Database initialized successfully');
+} catch (err) {
+  console.error('Database initialization failed:', err);
+}
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.set('trust proxy', 1);
+  app.use(express.json({ limit: '50mb' }));
   app.use(session({
     secret: 'wardrobe-capital-secret',
     resave: false,
     saveUninitialized: false,
+    proxy: true, // Required for secure cookies behind a proxy
     cookie: { 
-      secure: false, // Set to true in production with HTTPS
+      secure: true, // Required for SameSite=None
+      sameSite: 'none', // Required for cross-origin iframe
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
@@ -49,11 +71,8 @@ async function startServer() {
 
   // Auth Middleware
   const requireAuth = (req: any, res: any, next: any) => {
-    if (req.session.userId) {
-      next();
-    } else {
-      res.status(401).json({ error: 'Unauthorized' });
-    }
+    req.session.userId = 1; // Default user
+    next();
   };
 
   // API Routes
@@ -70,8 +89,9 @@ async function startServer() {
       const stmt = db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)');
       const info = stmt.run(username, hashedPassword);
       
-      req.session.userId = info.lastInsertRowid;
-      res.json({ id: info.lastInsertRowid, username });
+      const userId = Number(info.lastInsertRowid);
+      req.session.userId = userId;
+      res.json({ id: userId, username });
     } catch (err: any) {
       if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
         res.status(400).json({ error: 'Username already exists' });
@@ -119,28 +139,34 @@ async function startServer() {
 
   // Items CRUD
   app.get('/api/items', requireAuth, (req: any, res) => {
-    const stmt = db.prepare('SELECT * FROM items WHERE user_id = ?');
-    const items = stmt.all(req.session.userId);
-    res.json(items);
+    try {
+      const stmt = db.prepare('SELECT * FROM items WHERE user_id = ?');
+      const items = stmt.all(1); // Use default user ID 1
+      res.json(items);
+    } catch (error) {
+      console.error('Error fetching items:', error);
+      res.status(500).json({ error: 'Database error' });
+    }
   });
 
   app.post('/api/items', requireAuth, (req: any, res) => {
-    const { id, name, type, price, brand, material, purchaseDate, condition, imageUrl } = req.body;
+    const { id, name, category, price, brand, material, purchaseDate, condition, imageUrl, wearsPerYear } = req.body;
     const stmt = db.prepare(`
-      INSERT INTO items (id, user_id, name, type, price, brand, material, purchaseDate, condition, imageUrl)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO items (id, user_id, name, category, price, brand, material, purchaseDate, condition, imageUrl, wearsPerYear)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     try {
-      stmt.run(id, req.session.userId, name, type, price, brand, material, purchaseDate, condition, imageUrl);
+      stmt.run(id, 1, name, category, price, brand, material, purchaseDate, condition, imageUrl, wearsPerYear);
       res.json({ message: 'Item added' });
     } catch (err) {
+      console.error(err);
       res.status(500).json({ error: 'Failed to add item' });
     }
   });
 
   app.delete('/api/items/:id', requireAuth, (req: any, res) => {
     const stmt = db.prepare('DELETE FROM items WHERE id = ? AND user_id = ?');
-    const info = stmt.run(req.params.id, req.session.userId);
+    const info = stmt.run(req.params.id, 1);
     if (info.changes > 0) {
       res.json({ message: 'Item deleted' });
     } else {

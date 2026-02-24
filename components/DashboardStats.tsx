@@ -77,6 +77,30 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ items }) => {
             {items.length === 0 && <p className="text-theme-muted italic text-center py-4">Your portfolio is currently empty. Add items to see analytics.</p>}
         </div>
       </div>
+      <div className="bg-theme-card border border-theme-border rounded-xl p-6 shadow-sm transition-colors duration-300">
+        <h3 className="text-lg font-heading font-semibold text-theme-text mb-6">Portfolio Gallery</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          {items.filter(item => item.imageUrl).map(item => (
+            <div key={item.id} className="group relative aspect-square rounded-lg overflow-hidden border border-theme-border bg-theme-secondary">
+              <img 
+                src={item.imageUrl} 
+                alt={item.name} 
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3">
+                <p className="text-white text-xs font-medium truncate">{item.name}</p>
+                <p className="text-white/80 text-[10px] truncate">{item.brand}</p>
+                <p className="text-white/90 text-xs font-mono mt-1">€{item.price}</p>
+              </div>
+            </div>
+          ))}
+          {items.filter(item => item.imageUrl).length === 0 && (
+            <div className="col-span-full py-8 text-center text-theme-muted text-sm italic">
+              No visual assets recorded. Upload images to your wardrobe items to see them here.
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

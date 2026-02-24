@@ -10,6 +10,37 @@ Use financial terminology (e.g., ROI, depreciation, asset class, diversification
 Be concise, professional, but stylish.
 Always format your response in Markdown.`;
 
+export const analyzeImage = async (base64Image: string): Promise<any> => {
+    const prompt = `Analyze this clothing item. Return a JSON object with the following fields:
+    - name: a short descriptive name
+    - brand: brand name if visible, or "Unknown"
+    - category: one of "Tops", "Bottoms", "Outerwear", "Shoes", "Bags", "Accessories"
+    - price: estimated original retail price in EUR as a number
+    - material: primary material
+    - color: primary color
+    
+    Do not include markdown formatting like \`\`\`json. Just return the raw JSON string.`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: {
+                parts: [
+                    { inlineData: { mimeType: 'image/jpeg', data: base64Image } },
+                    { text: prompt }
+                ]
+            }
+        });
+        
+        const text = response.text || "{}";
+        const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        return JSON.parse(jsonStr);
+    } catch (error) {
+        console.error("Image analysis failed:", error);
+        return null;
+    }
+}
+
 export const getPortfolioAdvice = async (items: WardrobeItem[], question: string): Promise<string> => {
   const portfolioSummary = items.map(item => 
     `- ${item.brand} ${item.name} (${item.category}): Bought for €${item.price}, Worn ${item.wearsPerYear}x/year.`
